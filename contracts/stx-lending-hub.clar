@@ -226,3 +226,70 @@
         ERR-LIQUIDATION-FAILED
     ))
 )
+
+;; Read-Only Functions
+
+;; desc Gets user position details
+;; param user (principal) - user address
+;; returns {total-collateral: uint, total-borrowed: uint, loan-count: uint}
+(define-read-only (get-user-position (user principal))
+    (default-to
+        { total-collateral: u0, total-borrowed: u0, loan-count: u0 }
+        (map-get? user-positions { user: user })
+    )
+)
+
+;; desc Gets protocol-wide statistics
+;; returns {total-deposits: uint, total-borrows: uint, minimum-collateral-ratio: uint,
+;;           liquidation-threshold: uint, protocol-fee: uint}
+(define-read-only (get-protocol-stats)
+    {
+        total-deposits: (var-get total-deposits),
+        total-borrows: (var-get total-borrows),
+        minimum-collateral-ratio: (var-get minimum-collateral-ratio),
+        liquidation-threshold: (var-get liquidation-threshold),
+        protocol-fee: (var-get protocol-fee)
+    }
+)
+
+;; Admin Functions
+
+;; desc Updates minimum collateral ratio
+;; param new-ratio (uint) - new minimum collateral ratio
+;; returns (response bool uint) - success or error
+(define-public (set-minimum-collateral-ratio (new-ratio uint))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (asserts! (and (>= new-ratio MIN-COLLATERAL-RATIO) 
+                      (<= new-ratio MAX-COLLATERAL-RATIO)) 
+                 ERR-INVALID-PARAMETER)
+        (var-set minimum-collateral-ratio new-ratio)
+        (ok true)
+    )
+)
+
+;; desc Updates liquidation threshold
+;; param new-threshold (uint) - new liquidation threshold
+;; returns (response bool uint) - success or error
+(define-public (set-liquidation-threshold (new-threshold uint))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (asserts! (and (>= new-threshold MIN-COLLATERAL-RATIO)
+                      (<= new-threshold (var-get minimum-collateral-ratio)))
+                 ERR-INVALID-PARAMETER)
+        (var-set liquidation-threshold new-threshold)
+        (ok true)
+    )
+)
+
+;; desc Updates protocol fee
+;; param new-fee (uint) - new protocol fee
+;; returns (response bool uint) - success or error
+(define-public (set-protocol-fee (new-fee uint))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (asserts! (<= new-fee MAX-PROTOCOL-FEE) ERR-INVALID-PARAMETER)
+        (var-set protocol-fee new-fee)
+        (ok true)
+    )
+)
