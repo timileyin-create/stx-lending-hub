@@ -111,3 +111,69 @@
         }
     ))
 )
+
+;; Public Functions
+
+;; desc Deposits STX tokens as collateral
+;; param None - amount determined by tx value
+;; returns (response uint uint) - amount deposited or error
+(define-public (deposit)
+    (let (
+        (amount (stx-get-balance tx-sender))
+    )
+    (if (> amount u0)
+        (begin
+            (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+            (var-set total-deposits (+ (var-get total-deposits) amount))
+            (update-user-position tx-sender amount true u0 true)
+            (ok amount)
+        )
+        ERR-INVALID-AMOUNT
+    ))
+)
+
+;; desc Borrows STX against deposited collateral
+;; param amount (uint) - amount to borrow
+;; returns (response uint uint) - borrowed amount or error
+(define-public (borrow (amount uint))
+    (let (
+        (user-pos (default-to
+            { total-collateral: u0, total-borrowed: u0, loan-count: u0 }
+            (map-get? user-positions { user: tx-sender })))
+        (collateral (get total-collateral user-pos))
+        (current-borrowed (get total-borrowed user-pos))
+    )
+    (if (and
+            (> amount u0)
+            (>= (get-collateral-ratio collateral (+ current-borrowed amount))
+                (var-get minimum-collateral-ratio)))
+        (begin
+            (try! (as-contract (stx-transfer? amount (as-contract tx-sender) tx-sender)))
+            (var-set total-borrows (+ (var-get total-borrows) amount))
+            (update-user-position tx-sender u0 true amount true)
+            (ok amount)
+        )
+        ERR-INSUFFICIENT-COLLATERAL
+    ))
+)
+
+;; desc Repays borrowed STX
+;; param amount (uint) - amount to repay
+;; returns (response uint uint) - repaid amount or error
+(define-public (repay (amount uint))
+    (let (
+        (user-pos (default-to
+            { total-collateral: u0, total-borrowed: u0, loan-count: u0 }
+            (map-get? user-positions { user: tx-sender })))
+        (current-borrowed (get total-borrowed user-pos))
+    )
+    (if (<= amount current-borrowed)
+        (begin
+            (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+            (var-set total-borrows (- (var-get total-borrows) amount))
+            (update-user-position tx-sender u0 true amount false)
+            (ok amount)
+        )
+        ERR-INVALID-AMOUNT
+    ))
+)
