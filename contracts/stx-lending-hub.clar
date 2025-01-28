@@ -44,3 +44,70 @@
 (define-data-var protocol-fee uint u1) ;; 1% fee
 (define-data-var total-deposits uint u0)
 (define-data-var total-borrows uint u0)
+
+;; Data Maps
+(define-map loans
+    { loan-id: uint }
+    {
+        borrower: principal,
+        collateral-amount: uint,
+        borrowed-amount: uint,
+        interest-rate: uint,
+        start-height: uint,
+        last-interest-update: uint,
+        active: bool
+    }
+)
+
+(define-map user-positions
+    { user: principal }
+    {
+        total-collateral: uint,
+        total-borrowed: uint,
+        loan-count: uint
+    }
+)
+
+;; Private Functions
+(define-private (calculate-interest (principal uint) (rate uint) (blocks uint))
+    (let (
+        (interest-per-block (/ (* principal rate) u10000))
+        (total-interest (* interest-per-block blocks))
+    )
+    total-interest)
+)
+
+(define-private (get-collateral-ratio (collateral uint) (debt uint))
+    (if (is-eq debt u0)
+        u0
+        (/ (* collateral u100) debt)
+    )
+)
+
+(define-private (update-user-position 
+    (user principal) 
+    (collateral-delta uint) 
+    (is-collateral-increase bool) 
+    (borrow-delta uint) 
+    (is-borrow-increase bool)
+)
+    (let (
+        (current-position (default-to
+            { total-collateral: u0, total-borrowed: u0, loan-count: u0 }
+            (map-get? user-positions { user: user })))
+        (new-collateral (if is-collateral-increase
+            (+ (get total-collateral current-position) collateral-delta)
+            (- (get total-collateral current-position) collateral-delta)))
+        (new-borrowed (if is-borrow-increase
+            (+ (get total-borrowed current-position) borrow-delta)
+            (- (get total-borrowed current-position) borrow-delta)))
+    )
+    (map-set user-positions
+        { user: user }
+        {
+            total-collateral: new-collateral,
+            total-borrowed: new-borrowed,
+            loan-count: (get loan-count current-position)
+        }
+    ))
+)
